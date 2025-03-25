@@ -1,13 +1,12 @@
 from jnius import autoclass
-from android.broadcast import BroadcastReceiver
+from plyer import notification
 
 Context = autoclass('android.content.Context')
 Intent = autoclass('android.content.Intent')
+PythonService = autoclass('org.kivy.android.PythonService')
 
 def start_service(context, intent):
-    service = Intent(context, Context.getSystemService(Context.JOB_SCHEDULER_SERVICE))
-    context.startService(service)
+    service_intent = Intent(context, PythonService)
+    context.startService(service_intent)
 
-boot_receiver = BroadcastReceiver(start_service, actions=['android.intent.action.BOOT_COMPLETED'])
-boot_receiver.start()
-
+notification.notify(title="Сервис", message="Boot Completed Triggered!", timeout=5)

